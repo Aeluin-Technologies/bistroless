@@ -1,0 +1,44 @@
+load(
+    "//build:setup.bzl",
+    "define_root_targets",
+)
+
+package(
+    default_visibility = ["//visibility:public"],
+)
+
+exports_files([
+    "VERSION.txt",
+])
+
+define_root_targets()
+
+alias(
+    name = "dagster_image",
+    actual = "//images/dagster:image",
+)
+
+alias(
+    name = "dagster_image_amd64",
+    actual = "//images/dagster:image_amd64",
+)
+
+alias(
+    name = "dagster_image_arm64",
+    actual = "//images/dagster:image_arm64",
+)
+
+alias(
+    name = "dagster_image_load_amd64",
+    actual = "//images/dagster:image_load_amd64",
+)
+
+alias(
+    name = "dagster_image_load_arm64",
+    actual = "//images/dagster:image_load_arm64",
+)
+
+alias(
+    name = "dagster_image_push",
+    actual = "//images/dagster:image_push",
+)

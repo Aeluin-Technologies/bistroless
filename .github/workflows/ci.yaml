@@ -1,0 +1,70 @@
+name: OCI CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: oci-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build and test OCI images
+    runs-on: ubuntu
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up ARM64 emulation
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v9
+        with:
+          version: "0.12.0"
+          enable-cache: true
+          cache-dependency-glob: images/dagster/uv.lock
+
+      - name: Set up Bazel
+        uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}
+          repository-cache: true
+
+      - name: Validate uv lockfile
+        run: uv lock --check --project images/dagster
+
+      - name: Run Bazel tests
+        run: bazel test --nostamp //...
+
+      - name: Build multi-architecture image
+        run: bazel build --nostamp //images/dagster:image
+
+      - name: Load AMD64 image
+        run: bazel run --nostamp //images/dagster:image_load_amd64
+
+      - name: Test AMD64 image
+        run: |
+          build/ci/smoke_image.sh \
+            linux/amd64 \
+            local/bristroless-python:amd64 \
+            3000
+
+      - name: Load ARM64 image
+        run: bazel run --nostamp //images/dagster:image_load_arm64
+
+      - name: Test ARM64 image
+        run: |
+          build/ci/smoke_image.sh \
+            linux/arm64 \
+            local/bristroless-python:arm64 \
+            3001

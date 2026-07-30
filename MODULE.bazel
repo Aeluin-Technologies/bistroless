@@ -1,0 +1,122 @@
+module(
+    name = "bistroless_workspace",
+    version = "0.1.0",
+)
+
+bazel_dep(
+    name = "aspect_bazel_lib",
+    version = "2.22.5",
+)
+
+bazel_dep(
+    name = "rules_oci",
+    version = "2.3.0",
+)
+
+oci = use_extension(
+    "@rules_oci//oci:extensions.bzl",
+    "oci",
+)
+
+oci.pull(
+    name = "distroless_python_debian13_amd64",
+    image = "gcr.io/distroless/python3-debian13",
+    tag = "latest-amd64",
+)
+
+oci.pull(
+    name = "distroless_python_debian13_arm64",
+    image = "gcr.io/distroless/python3-debian13",
+    tag = "latest-arm64",
+)
+
+use_repo(
+    oci,
+    "distroless_python_debian13_amd64",
+    "distroless_python_debian13_arm64",
+)
+
+bistroless_layers = use_extension(
+    "//bistroless:extensions.bzl",
+    "bistroless",
+)
+
+bistroless_layers.python(
+    name = "dagster_python_layer_amd64",
+    archive_builder_image = "debian:trixie-slim",
+    container_engine = "docker",
+    container_platform = "linux/amd64",
+    lock = "//images/dagster:uv.lock",
+    only_binary = True,
+    pyproject = "//images/dagster:pyproject.toml",
+    python_platform = "x86_64-unknown-linux-gnu",
+    python_version = "3.13",
+    required_imports = [
+        "dagster",
+        "dagster_webserver",
+    ],
+    uv = "uv",
+)
+
+bistroless_layers.python(
+    name = "dagster_python_layer_arm64",
+    archive_builder_image = "debian:trixie-slim",
+    container_engine = "docker",
+    container_platform = "linux/arm64",
+    lock = "//images/dagster:uv.lock",
+    only_binary = True,
+    pyproject = "//images/dagster:pyproject.toml",
+    python_platform = "aarch64-unknown-linux-gnu",
+    python_version = "3.13",
+    required_imports = [
+        "dagster",
+        "dagster_webserver",
+    ],
+    uv = "uv",
+)
+
+bistroless_layers.debian(
+    name = "dagster_debian_layer_amd64",
+    architecture = "amd64",
+    builder_image = "debian:trixie-slim",
+    components = [
+        "main",
+    ],
+    container_engine = "docker",
+    mirror = "http://deb.debian.org/debian",
+    packages = [
+        "coreutils",
+        "dash",
+    ],
+    suite = "trixie",
+    symlinks = {
+        "/bin/sh": "/usr/bin/dash",
+    },
+)
+
+bistroless_layers.debian(
+    name = "dagster_debian_layer_arm64",
+    architecture = "arm64",
+    builder_image = "debian:trixie-slim",
+    components = [
+        "main",
+    ],
+    container_engine = "docker",
+    mirror = "http://deb.debian.org/debian",
+    packages = [
+        "coreutils",
+        "dash",
+    ],
+    suite = "trixie",
+    symlinks = {
+        "/bin/sh": "/usr/bin/dash",
+    },
+)
+
+use_repo(
+    bistroless_layers,
+    "dagster_debian_layer_amd64",
+    "dagster_debian_layer_arm64",
+    "dagster_python_layer_amd64",
+    "dagster_python_layer_arm64",
+)

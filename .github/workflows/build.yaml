@@ -43,7 +43,7 @@ jobs:
           - name: bristroless-python
             dockerfile: dagster/Dockerfile
             image_name: bristroless-python
-            context: dagster
+            context: .
 
     uses: docker/github-builder/.github/workflows/build.yml@v1
     permissions:

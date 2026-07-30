@@ -7,7 +7,6 @@ bazel_dep(
     name = "aspect_bazel_lib",
     version = "2.22.5",
 )
-
 bazel_dep(
     name = "rules_oci",
     version = "2.3.0",
@@ -17,19 +16,16 @@ oci = use_extension(
     "@rules_oci//oci:extensions.bzl",
     "oci",
 )
-
 oci.pull(
     name = "distroless_python_debian13_amd64",
     image = "gcr.io/distroless/python3-debian13",
     tag = "latest-amd64",
 )
-
 oci.pull(
     name = "distroless_python_debian13_arm64",
     image = "gcr.io/distroless/python3-debian13",
     tag = "latest-arm64",
 )
-
 use_repo(
     oci,
     "distroless_python_debian13_amd64",
@@ -40,7 +36,6 @@ bistroless_layers = use_extension(
     "//bistroless:extensions.bzl",
     "bistroless",
 )
-
 bistroless_layers.python(
     name = "dagster_python_layer_amd64",
     archive_builder_image = "debian:trixie-slim",
@@ -57,7 +52,6 @@ bistroless_layers.python(
     ],
     uv = "uv",
 )
-
 bistroless_layers.python(
     name = "dagster_python_layer_arm64",
     archive_builder_image = "debian:trixie-slim",
@@ -74,7 +68,6 @@ bistroless_layers.python(
     ],
     uv = "uv",
 )
-
 bistroless_layers.debian(
     name = "dagster_debian_layer_amd64",
     architecture = "amd64",
@@ -93,7 +86,6 @@ bistroless_layers.debian(
         "/bin/sh": "/usr/bin/dash",
     },
 )
-
 bistroless_layers.debian(
     name = "dagster_debian_layer_arm64",
     architecture = "arm64",
@@ -112,7 +104,6 @@ bistroless_layers.debian(
         "/bin/sh": "/usr/bin/dash",
     },
 )
-
 use_repo(
     bistroless_layers,
     "dagster_debian_layer_amd64",

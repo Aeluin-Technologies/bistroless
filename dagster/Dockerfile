@@ -3,6 +3,7 @@ FROM debian:trixie-slim AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     python3-pip \
+    coreutils \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --no-cache-dir --break-system-packages --target=/site-packages \
@@ -12,6 +13,8 @@ RUN python3 -m pip install --no-cache-dir --break-system-packages --target=/site
 FROM gcr.io/distroless/python3-debian13
 
 COPY --from=builder /site-packages /site-packages
+COPY --from=builder /usr/bin/tail /usr/bin/tail
+COPY --from=builder /bin/sh /bin/sh
 
 ENV PYTHONPATH="/site-packages"
 ENV PYTHONUNBUFFERED="1"

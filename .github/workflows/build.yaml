@@ -1,0 +1,67 @@
+name: Build and Push OCI Images
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Semver of OCI images (e.g. 1.0.0)'
+        required: true
+        default: 'latest'
+
+env:
+  REGISTRY: ghcr.io
+  ORGANIZATION: aeluin-technologies
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get_version.outputs.version }}
+      raw_tag: ${{ steps.get_version.outputs.raw_tag }}
+    steps:
+      - name: Extract version tag
+        id: get_version
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            TAG="${{ github.event.release.tag_name }}"
+          else
+            TAG="${{ inputs.version }}"
+          fi
+          CLEAN_VERSION=$(echo "$TAG" | sed -E 's/^v//')
+          echo "Building version: $CLEAN_VERSION"
+          echo "version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
+          echo "raw_tag=$TAG" >> $GITHUB_OUTPUT
+
+  build-and-push:
+    needs: prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: bristroless-python
+            dockerfile: dagster/Dockerfile
+            image_name: bristroless-python
+            context: dagster
+
+    uses: docker/github-builder/.github/workflows/build.yml@v1
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+    with:
+      output: image
+      push: true
+      context: ${{ matrix.context }}
+      file: ${{ matrix.dockerfile }}
+      platforms: linux/amd64,linux/arm64/v8
+      meta-images: ghcr.io/aeluin-technologies/${{ matrix.image_name }}
+      meta-tags: |
+        type=raw,value=${{ needs.prepare.outputs.version }}
+        type=raw,value=latest
+    secrets:
+      registry-auths: |
+        - registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}

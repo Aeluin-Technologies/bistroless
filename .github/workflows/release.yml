@@ -1,0 +1,150 @@
+name: Publish OCI Images
+
+on:
+  release:
+    types:
+      - published
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Semver from VERSION.txt
+        required: true
+        type: string
+      publish_latest:
+        description: Also publish the latest tag
+        required: true
+        default: false
+        type: boolean
+
+concurrency:
+  group: oci-release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    name: Validate release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      publish_latest: ${{ steps.version.outputs.publish_latest }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Resolve release version
+        id: version
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+          RELEASE_PRERELEASE: ${{ github.event.release.prerelease }}
+          INPUT_VERSION: ${{ inputs.version }}
+          INPUT_PUBLISH_LATEST: ${{ inputs.publish_latest }}
+        run: |
+          set -euo pipefail
+
+          FILE_VERSION="$(tr -d '[:space:]' < VERSION.txt)"
+
+          if [[ "${EVENT_NAME}" == "release" ]]; then
+              REQUESTED_VERSION="${RELEASE_TAG#v}"
+
+              if [[ "${RELEASE_PRERELEASE}" == "true" ]]; then
+                  PUBLISH_LATEST="false"
+              else
+                  PUBLISH_LATEST="true"
+              fi
+          else
+              REQUESTED_VERSION="${INPUT_VERSION#v}"
+              PUBLISH_LATEST="${INPUT_PUBLISH_LATEST}"
+          fi
+
+          if [[ ! "${REQUESTED_VERSION}" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+              echo "Invalid semantic version: ${REQUESTED_VERSION}" >&2
+              exit 1
+          fi
+
+          if [[ "${REQUESTED_VERSION}" != "${FILE_VERSION}" ]]; then
+              echo "Release version ${REQUESTED_VERSION} does not match VERSION.txt ${FILE_VERSION}" >&2
+              exit 1
+          fi
+
+          echo "version=${REQUESTED_VERSION}" >> "${GITHUB_OUTPUT}"
+          echo "publish_latest=${PUBLISH_LATEST}" >> "${GITHUB_OUTPUT}"
+
+  build-test-push:
+    name: Build, test and publish OCI index
+    needs:
+      - prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up ARM64 emulation
+        uses: docker/setup-qemu-action@v4
+        with:
+          platforms: arm64
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@c771a70e6277c0a99b617c7a806ffedaca235ff9 # v9.0.0
+        with:
+          version: "0.12.0"
+          enable-cache: true
+          cache-dependency-glob: images/dagster/uv.lock
+
+      - name: Set up Bazel
+        uses: bazel-contrib/setup-bazel@0.19.0
+        with:
+          bazelisk-cache: true
+          disk-cache: ${{ github.workflow }}
+          repository-cache: true
+
+      - name: Validate uv lockfile
+        run: uv lock --check --project images/dagster
+
+      - name: Build multi-architecture image
+        run: bazel build --stamp //images/dagster:image
+
+      - name: Load AMD64 image
+        run: bazel run --stamp //images/dagster:image_load_amd64
+
+      - name: Test AMD64 image
+        run: |
+          build/ci/smoke_image.sh \
+            linux/amd64 \
+            local/bristroless-python:amd64 \
+            3000
+
+      - name: Load ARM64 image
+        run: bazel run --stamp //images/dagster:image_load_arm64
+
+      - name: Test ARM64 image
+        run: |
+          build/ci/smoke_image.sh \
+            linux/arm64 \
+            local/bristroless-python:arm64 \
+            3001
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish versioned image
+        if: needs.prepare.outputs.publish_latest != 'true'
+        run: bazel run --stamp //images/dagster:image_push
+
+      - name: Publish versioned and latest image
+        if: needs.prepare.outputs.publish_latest == 'true'
+        run: |
+          bazel run --stamp //images/dagster:image_push -- \
+            --tag latest

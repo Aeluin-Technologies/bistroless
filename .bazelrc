@@ -1,0 +1,8 @@
+common --enable_bzlmod
+
+build --verbose_failures
+build --stamp
+build --workspace_status_command=./build/workspace_status.sh
+
+run --stamp
+run --workspace_status_command=./build/workspace_status.sh

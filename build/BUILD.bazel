@@ -1,0 +1,5 @@
+exports_files([
+    "setup.bzl",
+    "version.bzl",
+    "workspace_status.sh",
+])

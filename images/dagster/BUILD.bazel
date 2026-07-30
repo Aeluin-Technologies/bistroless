@@ -1,0 +1,92 @@
+load(
+    "//bistroless:defs.bzl",
+    "bistroless_image",
+    "bistroless_image_index",
+    "bistroless_load",
+    "bistroless_push",
+)
+
+package(
+    default_visibility = ["//visibility:public"],
+)
+
+exports_files([
+    "pyproject.toml",
+    "uv.lock",
+])
+
+_DAGSTER_CMD = [
+    "-h",
+    "0.0.0.0",
+    "-p",
+    "3000",
+]
+
+_DAGSTER_ENTRYPOINT = [
+    "/usr/bin/python3",
+    "-c",
+    "from dagster_webserver.cli import main; main()",
+]
+
+_DAGSTER_ENV = {
+    "PATH": "/usr/bin",
+    "PYTHONPATH": "/site-packages",
+    "PYTHONUNBUFFERED": "1",
+}
+
+bistroless_image(
+    name = "image_amd64",
+    base = "@distroless_python_debian13_amd64",
+    cmd = _DAGSTER_CMD,
+    entrypoint = _DAGSTER_ENTRYPOINT,
+    env = _DAGSTER_ENV,
+    labels = "//:image_labels",
+    layers = [
+        "@dagster_debian_layer_amd64//:layer",
+        "@dagster_python_layer_amd64//:layer",
+    ],
+)
+
+bistroless_image(
+    name = "image_arm64",
+    base = "@distroless_python_debian13_arm64",
+    cmd = _DAGSTER_CMD,
+    entrypoint = _DAGSTER_ENTRYPOINT,
+    env = _DAGSTER_ENV,
+    labels = "//:image_labels",
+    layers = [
+        "@dagster_debian_layer_arm64//:layer",
+        "@dagster_python_layer_arm64//:layer",
+    ],
+)
+
+bistroless_image_index(
+    name = "image",
+    images = [
+        ":image_amd64",
+        ":image_arm64",
+    ],
+)
+
+bistroless_load(
+    name = "image_load_amd64",
+    image = ":image_amd64",
+    repo_tags = [
+        "local/bristroless-python:amd64",
+    ],
+)
+
+bistroless_load(
+    name = "image_load_arm64",
+    image = ":image_arm64",
+    repo_tags = [
+        "local/bristroless-python:arm64",
+    ],
+)
+
+bistroless_push(
+    name = "image_push",
+    image = ":image",
+    remote_tags = "//:image_version_tag",
+    repository = "ghcr.io/aeluin-technologies/bristroless-python",
+)
